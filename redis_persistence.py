@@ -19,6 +19,13 @@ def conversations_to_dict(some_string):
     return dict(result)
 
 
+def parse_int_keys_in_dict(some_dict):
+    result = {}
+    for key, value in some_dict.items():
+        result[int(key)] = value
+    return result
+
+
 class RedisPersistence(BasePersistence):
     def __init__(self, host: str, port: int, db: int, password: str = None, *args, **kwargs) -> None:
         self.r_conn = Redis(host=host, port=port, db=db, password=password, decode_responses=True)
@@ -49,16 +56,15 @@ class RedisPersistence(BasePersistence):
         chat_data = r_conn.get('chat_data')
         if chat_data is None:
             return defaultdict(dict)
-        return defaultdict(dict, json.loads(chat_data))
+        return defaultdict(dict, parse_int_keys_in_dict(json.loads(chat_data)))
         
     def update_chat_data(self, chat_id: int, data: CD) -> None:
-        chat_id = str(chat_id)
         r_conn = self.get_redis_connection()
         chat_data = r_conn.get('chat_data')
         if chat_data is None:
             chat_data = defaultdict(dict)
         else:
-            chat_data = defaultdict(dict, json.loads(chat_data, parse_int=int))
+            chat_data = defaultdict(dict, json.loads(chat_data))
             if chat_data[chat_id] == data:
                 return
         chat_data[chat_id] = data
@@ -70,10 +76,9 @@ class RedisPersistence(BasePersistence):
         user_data = r_conn.get('user_data')
         if user_data is None:
             return defaultdict(dict)
-        return defaultdict(dict, json.loads(user_data, parse_int=int))
+        return defaultdict(dict, parse_int_keys_in_dict(json.loads(user_data)))
 
     def update_user_data(self, user_id: int, data: UD) -> None:
-        user_id = str(user_id)
         r_conn = self.get_redis_connection()
         user_data = r_conn.get('user_data')
         if user_data is None:
