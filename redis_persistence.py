@@ -58,7 +58,7 @@ class RedisPersistence(BasePersistence):
         if chat_data is None:
             chat_data = defaultdict(dict)
         else:
-            chat_data = defaultdict(dict, json.loads(chat_data))
+            chat_data = defaultdict(dict, json.loads(chat_data, parse_int=int))
             if chat_data[chat_id] == data:
                 return
         chat_data[chat_id] = data
@@ -70,7 +70,7 @@ class RedisPersistence(BasePersistence):
         user_data = r_conn.get('user_data')
         if user_data is None:
             return defaultdict(dict)
-        return defaultdict(dict, json.loads(user_data))
+        return defaultdict(dict, json.loads(user_data, parse_int=int))
 
     def update_user_data(self, user_id: int, data: UD) -> None:
         user_id = str(user_id)
