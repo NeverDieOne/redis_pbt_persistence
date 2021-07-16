@@ -39,28 +39,62 @@ class RedisPersistence(BasePersistence):
             return defaultdict(dict)
         return json.loads(chat_data)
         
-
     def update_chat_data(self, chat_id: int, data: CD) -> None:
         r_conn = self.get_redis_connection()
-        pass
+        chat_data = r_conn.get('chat_data')
+        if chat_data is None:
+            chat_data = defaultdict(dict)
+        else:
+            chat_data = json.loads(chat_data)
+            if chat_data == data:
+                return
+        chat_data[chat_id] = data
+        r_conn.set('chat_data', json.dumps(chat_data))
 
     # Methods fot user data
     def get_user_data(self) -> DefaultDict[int, UD]:
-        pass
+        r_conn = self.get_redis_connection()
+        user_data = r_conn.get('user_data')
+        if user_data is None:
+            return defaultdict(dict)
+        return json.loads(user_data)
 
     def update_user_data(self, user_id: int, data: UD) -> None:
-        pass
+        r_conn = self.get_redis_connection()
+        user_data = r_conn.get('user_data')
+        if user_data is None:
+            user_data = defaultdict(dict)
+        else:
+            user_data = json.loads(user_data)
+            if user_data == data:
+                return
+        user_data[user_id] = data
+        r_conn.set('user_data', user_data)
 
     # Methods for callback data
     def get_callback_data(self) -> Optional[CDCData]:
-        pass
+        r_conn = self.get_redis_connection()
+        callback_data = r_conn.get('callback_data')
+        if callback_data is None:
+            return None
+        callback_data = json.loads(callback_data)
+        return callback_data[0], callback_data[1].copy()
 
     def update_callback_data(self, data: CDCData) -> None:
-        pass
+        r_conn = self.get_redis_connection()
+        callback_data = r_conn.get('callback_data')
+        if callback_data and json.loads(callback_data) == data:
+            return
+        r_conn.set('callback_data', [data[0], data[1].copy()])
 
     # Methods for conversations
     def get_conversations(self, name: str) -> ConversationDict:
-        pass
+        r_conn = self.get_redis_connection()
+        conversations = r_conn.get('conversations')
+        if conversations is None:
+            return {}
+        conversations = json.loads(conversations)
+        return conversations.get(name, {}).copy()
 
     def update_conversation(
         self,
@@ -68,7 +102,13 @@ class RedisPersistence(BasePersistence):
         key: Tuple[int, ...],
         new_state: Optional[object]
     ) -> None:
-        pass
-
-    def flush(self) -> None:
-        pass
+        r_conn = self.get_redis_connection()
+        conversations = r_conn.get('conversations')
+        if conversations is None:
+            conversations = {}
+        else:
+            conversations = json.loads(conversations)
+        if conversations.setdefault(name, {}).get(key) == new_state:
+            return
+        conversations[name][key] = new_state
+        r_conn.set('conversations', json.dumps(conversations))
