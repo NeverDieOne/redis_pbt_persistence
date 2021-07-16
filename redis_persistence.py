@@ -8,18 +8,20 @@ from telegram.ext.utils.types import UD, CD, BD, CDCData, ConversationDict
 from redis import Redis
 
 
-def convert_to_str(some_dict):
-    print({str(k):v for k, v in some_dict.items()})
-    return json.dumps({str(k):v for k, v in some_dict.items()})
-
-def convert_to_dict(some_string):
+def conversations_to_dict(some_string):
     some_dict = json.loads(some_string)
-    return {literal_eval(k):v for k, v in some_dict.items()}
+
+    result = defaultdict(dict)
+    for conversation_name, states in some_dict.items():
+        for state_id, state in states.items():
+            result[conversation_name][literal_eval(state_id)] = state
+
+    return dict(result)
 
 
 class RedisPersistence(BasePersistence):
-    def __init__(self, host: str, port: int, db: int, *args, **kwargs) -> None:
-        self.r_conn = Redis(host=host, port=port, db=0, decode_responses=True)
+    def __init__(self, host: str, port: int, db: int, password: str = None, *args, **kwargs) -> None:
+        self.r_conn = Redis(host=host, port=port, db=db, password=password, decode_responses=True)
         super().__init__(*args, **kwargs)
 
     # Methods for db
@@ -50,13 +52,14 @@ class RedisPersistence(BasePersistence):
         return defaultdict(dict, json.loads(chat_data))
         
     def update_chat_data(self, chat_id: int, data: CD) -> None:
+        chat_id = str(chat_id)
         r_conn = self.get_redis_connection()
         chat_data = r_conn.get('chat_data')
         if chat_data is None:
             chat_data = defaultdict(dict)
         else:
-            chat_data = json.loads(chat_data)
-            if chat_data == data:
+            chat_data = defaultdict(dict, json.loads(chat_data))
+            if chat_data[chat_id] == data:
                 return
         chat_data[chat_id] = data
         r_conn.set('chat_data', json.dumps(chat_data))
@@ -70,13 +73,14 @@ class RedisPersistence(BasePersistence):
         return defaultdict(dict, json.loads(user_data))
 
     def update_user_data(self, user_id: int, data: UD) -> None:
+        user_id = str(user_id)
         r_conn = self.get_redis_connection()
         user_data = r_conn.get('user_data')
         if user_data is None:
             user_data = defaultdict(dict)
         else:
-            user_data = json.loads(user_data)
-            if user_data == data:
+            user_data = defaultdict(dict, json.loads(user_data))
+            if user_data[user_id] == data:
                 return
         user_data[user_id] = data
         r_conn.set('user_data', json.dumps(user_data))
@@ -103,7 +107,7 @@ class RedisPersistence(BasePersistence):
         conversations = r_conn.get('conversations')
         if conversations is None:
             return {}
-        conversations = convert_to_dict(conversations)
+        conversations = conversations_to_dict(conversations)
         return conversations.get(name, {}).copy()
 
     def update_conversation(
@@ -120,8 +124,5 @@ class RedisPersistence(BasePersistence):
             conversations = json.loads(conversations)
         if conversations.setdefault(name, {}).get(key) == new_state:
             return
-        conversations[name][key] = new_state
-        r_conn.set(
-            'conversations',
-            convert_to_str(conversations)
-        )
+        conversations[name][str(key)] = new_state
+        r_conn.set('conversations', json.dumps(conversations))
