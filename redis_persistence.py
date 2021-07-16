@@ -1,29 +1,13 @@
 from typing import DefaultDict, Optional, Tuple
 import json
 from collections import defaultdict
-from ast import literal_eval
 
 from telegram.ext import BasePersistence
 from telegram.ext.utils.types import UD, CD, BD, CDCData, ConversationDict
+from telegram.utils.helpers import (
+    decode_user_chat_data_from_json, decode_conversations_from_json, encode_conversations_to_json
+)
 from redis import Redis
-
-
-def conversations_to_dict(some_string):
-    some_dict = json.loads(some_string)
-
-    result = defaultdict(dict)
-    for conversation_name, states in some_dict.items():
-        for state_id, state in states.items():
-            result[conversation_name][literal_eval(state_id)] = state
-
-    return dict(result)
-
-
-def parse_int_keys_in_dict(some_dict):
-    result = {}
-    for key, value in some_dict.items():
-        result[int(key)] = value
-    return result
 
 
 class RedisPersistence(BasePersistence):
@@ -56,7 +40,7 @@ class RedisPersistence(BasePersistence):
         chat_data = r_conn.get('_chat_data')
         if chat_data is None:
             return defaultdict(dict)
-        return defaultdict(dict, parse_int_keys_in_dict(json.loads(chat_data)))
+        return defaultdict(dict, decode_user_chat_data_from_json(chat_data))
         
     def update_chat_data(self, chat_id: int, data: CD) -> None:
         r_conn = self.get_redis_connection()
@@ -64,7 +48,7 @@ class RedisPersistence(BasePersistence):
         if chat_data is None:
             chat_data = defaultdict(dict)
         else:
-            chat_data = defaultdict(dict, parse_int_keys_in_dict(json.loads(chat_data)))
+            chat_data = defaultdict(dict, decode_user_chat_data_from_json(chat_data))
             if chat_data[chat_id] == data:
                 return
         chat_data[chat_id] = data
@@ -76,7 +60,7 @@ class RedisPersistence(BasePersistence):
         user_data = r_conn.get('_user_data')
         if user_data is None:
             return defaultdict(dict)
-        return defaultdict(dict, parse_int_keys_in_dict(json.loads(user_data)))
+        return defaultdict(dict, decode_user_chat_data_from_json(user_data))
 
     def update_user_data(self, user_id: int, data: UD) -> None:
         r_conn = self.get_redis_connection()
@@ -84,7 +68,7 @@ class RedisPersistence(BasePersistence):
         if user_data is None:
             user_data = defaultdict(dict)
         else:
-            user_data = defaultdict(dict, parse_int_keys_in_dict(json.loads(user_data)))
+            user_data = defaultdict(dict, decode_user_chat_data_from_json(user_data))
             if user_data[user_id] == data:
                 return
         user_data[user_id] = data
@@ -112,7 +96,7 @@ class RedisPersistence(BasePersistence):
         conversations = r_conn.get('_conversations')
         if conversations is None:
             return {}
-        conversations = conversations_to_dict(conversations)
+        conversations = decode_conversations_from_json(conversations)
         return conversations.get(name, {}).copy()
 
     def update_conversation(
@@ -126,8 +110,8 @@ class RedisPersistence(BasePersistence):
         if conversations is None:
             conversations = {}
         else:
-            conversations = json.loads(conversations)
+            conversations = decode_conversations_from_json(conversations)
         if conversations.setdefault(name, {}).get(key) == new_state:
             return
-        conversations[name][str(key)] = new_state
-        r_conn.set('_conversations', json.dumps(conversations))
+        conversations[name][key] = new_state
+        r_conn.set('_conversations', encode_conversations_to_json(conversations))
