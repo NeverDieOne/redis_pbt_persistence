@@ -1,10 +1,20 @@
 from typing import DefaultDict, Optional, Tuple
 import json
 from collections import defaultdict
+from ast import literal_eval
 
 from telegram.ext import BasePersistence
 from telegram.ext.utils.types import UD, CD, BD, CDCData, ConversationDict
 from redis import Redis
+
+
+def convert_to_str(some_dict):
+    print({str(k):v for k, v in some_dict.items()})
+    return json.dumps({str(k):v for k, v in some_dict.items()})
+
+def convert_to_dict(some_string):
+    some_dict = json.loads(some_string)
+    return {literal_eval(k):v for k, v in some_dict.items()}
 
 
 class RedisPersistence(BasePersistence):
@@ -37,7 +47,7 @@ class RedisPersistence(BasePersistence):
         chat_data = r_conn.get('chat_data')
         if chat_data is None:
             return defaultdict(dict)
-        return json.loads(chat_data)
+        return defaultdict(dict, json.loads(chat_data))
         
     def update_chat_data(self, chat_id: int, data: CD) -> None:
         r_conn = self.get_redis_connection()
@@ -57,7 +67,7 @@ class RedisPersistence(BasePersistence):
         user_data = r_conn.get('user_data')
         if user_data is None:
             return defaultdict(dict)
-        return json.loads(user_data)
+        return defaultdict(dict, json.loads(user_data))
 
     def update_user_data(self, user_id: int, data: UD) -> None:
         r_conn = self.get_redis_connection()
@@ -69,7 +79,7 @@ class RedisPersistence(BasePersistence):
             if user_data == data:
                 return
         user_data[user_id] = data
-        r_conn.set('user_data', user_data)
+        r_conn.set('user_data', json.dumps(user_data))
 
     # Methods for callback data
     def get_callback_data(self) -> Optional[CDCData]:
@@ -85,7 +95,7 @@ class RedisPersistence(BasePersistence):
         callback_data = r_conn.get('callback_data')
         if callback_data and json.loads(callback_data) == data:
             return
-        r_conn.set('callback_data', [data[0], data[1].copy()])
+        r_conn.set('callback_data', json.dumps([data[0], data[1].copy()]))
 
     # Methods for conversations
     def get_conversations(self, name: str) -> ConversationDict:
@@ -93,7 +103,7 @@ class RedisPersistence(BasePersistence):
         conversations = r_conn.get('conversations')
         if conversations is None:
             return {}
-        conversations = json.loads(conversations)
+        conversations = convert_to_dict(conversations)
         return conversations.get(name, {}).copy()
 
     def update_conversation(
@@ -111,4 +121,7 @@ class RedisPersistence(BasePersistence):
         if conversations.setdefault(name, {}).get(key) == new_state:
             return
         conversations[name][key] = new_state
-        r_conn.set('conversations', json.dumps(conversations))
+        r_conn.set(
+            'conversations',
+            convert_to_str(conversations)
+        )
